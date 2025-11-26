@@ -25,4 +25,4 @@ struct ValidationReport {
 // - nós dentro do domínio circular de raio Rdomain
 ValidationReport validateTree(const Tree& T, int MAX_CHILDREN, double Rdomain);
 
-} // namespace cco
+} 
