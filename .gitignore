@@ -1,0 +1,8 @@
+build/
+*.vtk
+*.csv
+*.dot
+*.vtu
+*.eps
+*.svg
+.DS_Store
