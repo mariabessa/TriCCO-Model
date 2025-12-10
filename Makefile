@@ -1,41 +1,32 @@
 # -----------------------------------------------------
 # Makefile auxiliar para o projeto TriCCO-Model
-# Comandos principais:
-#   make build      -> cria a pasta build e compila
-#   make run        -> executa o tp1-binary
-#   make clean      -> limpa a pasta build/
-#   make vtk        -> gera a saída VTK e lista data/
-#   make paraview   -> abre o VTK no ParaView
 # -----------------------------------------------------
 
-# Nome do executável criado pelo CMake
-EXEC = tp1-binary
-
-# Pasta de compilação
+EXEC      = tp1-binary
 BUILD_DIR = build
+VTK_FILE  = $(BUILD_DIR)/data/cco_tp1_binary.vtk
+DOT_FILE  = $(BUILD_DIR)/data/arvore.dot
+PNG_FILE  = $(BUILD_DIR)/data/arvore.png
 
-# Caminho do arquivo VTK gerado
-VTK_FILE = build/data/cco_tp1_binary.vtk
+.PHONY: build run vtk paraview dot clean distclean help
 
 # -----------------------------------------------------
 # Criação e compilação
 # -----------------------------------------------------
 
-.PHONY: build run
-
 build:
 	@echo ">>> Configurando e compilando com CMake..."
 	mkdir -p $(BUILD_DIR)
 	cd $(BUILD_DIR) && cmake .. -DCMAKE_BUILD_TYPE=Release
-	cd $(BUILD_DIR) && $(MAKE)
+	cd $(BUILD_DIR) && cmake --build . -j
 
 # -----------------------------------------------------
 # Execução
 # -----------------------------------------------------
 
-run:
+run: build
 	@echo ">>> Executando $(EXEC)..."
-	mkdir -p data
+	mkdir -p $(BUILD_DIR)/data
 	./$(BUILD_DIR)/$(EXEC)
 
 # -----------------------------------------------------
@@ -43,13 +34,12 @@ run:
 # -----------------------------------------------------
 
 vtk: run
-	@echo ">>> Arquivos na pasta build/data/:"
-	@ls -lh build/data/
+	@echo ">>> Arquivos na pasta $(BUILD_DIR)/data/:"
+	@ls -lh $(BUILD_DIR)/data/
 
-paraview:
+paraview: run
 	@echo ">>> Abrindo ParaView com: $(VTK_FILE)"
 	paraview $(VTK_FILE)
-
 
 # -----------------------------------------------------
 # Geração da imagem PNG do arquivo DOT
@@ -57,14 +47,13 @@ paraview:
 
 dot: run
 	@echo ">>> Gerando imagem PNG da árvore..."
-	@if [ ! -f build/data/arvore.dot ]; then \
-		echo "ERRO: build/data/arvore.dot não existe!"; \
-		echo "Rode 'make run' primeiro."; \
+	@if [ ! -f "$(DOT_FILE)" ]; then \
+		echo "ERRO: $(DOT_FILE) não existe! Rode 'make run' primeiro."; \
 		exit 1; \
 	fi
-	dot -Tpng build/data/arvore.dot -o build/data/arvore.png
-	@echo ">>> Arquivo gerado: build/data/arvore.png"
-	
+	dot -Tpng "$(DOT_FILE)" -o "$(PNG_FILE)"
+	@echo ">>> Arquivo gerado: $(PNG_FILE)"
+
 # -----------------------------------------------------
 # Limpeza
 # -----------------------------------------------------
@@ -73,23 +62,16 @@ clean:
 	@echo ">>> Limpando build/..."
 	rm -rf $(BUILD_DIR)
 
-# -----------------------------------------------------
-# Limpeza total (build + data)
-# -----------------------------------------------------
-
 distclean:
 	@echo ">>> Limpando build/ + data/..."
 	rm -rf $(BUILD_DIR) data/
 
-# -----------------------------------------------------
-# Ajuda
-# -----------------------------------------------------
-
 help:
 	@echo "Comandos disponíveis:"
 	@echo "  make build      - Configura e compila"
-	@echo "  make run        - Executa o TP1"
+	@echo "  make run        - Compila (se precisar) e executa"
 	@echo "  make vtk        - Executa e lista o VTK"
-	@echo "  make paraview   - Abre o VTK no ParaView"
+	@echo "  make paraview   - Executa e abre o VTK no ParaView"
+	@echo "  make dot        - Gera a imagem PNG da árvore"
 	@echo "  make clean      - Remove build/"
 	@echo "  make distclean  - Remove build/ e data/"
