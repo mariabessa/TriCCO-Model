@@ -74,37 +74,139 @@ NodeId Tree::addTerminal(){
     if(minDistToAnySegment(q) >= cco::MIN_DIST_PT) break; // aceita se longe o suficiente
   }
 
-  // escolhe segmento mais próximo e prepara bifurcação no meio
-  NodeId child = nearestSegment(q);
-  Vec2  a = nodes_[child].p; // ponto filho do segmento
-  Vec2  b = nodes_[nodes_[child].parent].p; // ponto pai do segmento
+  // mudanca da logica de escolha de segmentou para seguir cco classico:
+  //  Otimização Global
+  // Para cada novo terminal q:
+  // 1. Testa-se todos os segmentos candidatos (Bifurcação)
+  // 2. Testa-se todos os nós candidatos com grau < MAX_CHILDREN (Trifurcação)
+  // 3. Escolhe a opção que minimiza o custo global
 
-  Vec2 bif = lerp(a, b, 0.5); // ponto médio -> local da bifurcação
-  NodeId parentOld = nodes_[child].parent; // pai original do `child`
+  NodeId bestSegmentNode = -1; 
+  double bestT = 0.5;
+  NodeId bestAttachNode = -1; // para trifurcação
+  double minGlobalCost = std::numeric_limits<double>::infinity();
 
-  NodeId bifId = addNode(bif, parentOld); // cria nó de bifurcação como filho do pai antigo
-  {
-    auto& vec = nodes_[parentOld].children; // referência ao vetor de filhos do pai antigo
-    auto it = std::find(vec.begin(), vec.end(), child);
-    if (it != vec.end()) {
-      vec.erase(it);
-    }
+  // Snapshot do estado atual para permitir simulações
+  std::vector<Node> originalNodes = nodes_;
+
+  // LOOP 1: TESTE DE BIFURCAÇÃO (Quebrar um segmento) 
+  for(size_t i = 0; i < originalNodes.size(); ++i){
+      const auto& n = originalNodes[i];
+      if(n.parent < 0) continue; // Raiz sem pai
+      
+      // Candidato: segmento (n, parent)
+      const auto& pNode = originalNodes[n.parent];
+      double t = cco::getProjectionT(q, n.p, pNode.p);
+
+      // Restaura estado
+      nodes_ = originalNodes; 
+      
+      // Simula inserção (Bifurcação)
+      NodeId child = (NodeId)i; 
+      Vec2 a = nodes_[child].p;
+      Vec2 b = nodes_[nodes_[child].parent].p;
+      Vec2 bif = lerp(a, b, t);
+      
+      NodeId parentOld = nodes_[child].parent;
+      NodeId bifId = addNode(bif, parentOld); 
+      
+      {
+        auto& vec = nodes_[parentOld].children;
+        auto it = std::find(vec.begin(), vec.end(), child);
+        if (it != vec.end()) vec.erase(it);
+      }
+      nodes_[child].parent = bifId;
+      nodes_[bifId].children.push_back(child);
+
+      if((int)nodes_[bifId].children.size() < MAX_CHILDREN){
+         addNode(q, bifId);
+      } else {
+         NodeId tgt = nodes_[bifId].children.front();
+         addNode(q, tgt);
+      }
+
+      recomputeFlowAndRadius();
+      double currentCost = totalCost();
+
+      if(currentCost < minGlobalCost){
+          minGlobalCost = currentCost;
+          bestSegmentNode = child;
+          bestT = t;
+          bestAttachNode = -1; // Invalida trifurcação pois achou melhor bifurcação
+      }
   }
-  nodes_[child].parent = bifId; // atualiza parent do child para a bifurcação
-  nodes_[bifId].children.push_back(child); // registra child como filho da bifurcação
 
-  // decide onde anexar o terminal: na bifurcação (se espaço) ou no primeiro filho existente
-  NodeId term = -1;
-  if((int)nodes_[bifId].children.size() < MAX_CHILDREN)
-    term = addNode(q, bifId); // adiciona terminal como filho da bifurcação
+  // LOOP 2: TESTE DE TRIFURCAÇÃO (Conectar a nó existente) 
+  for(size_t i = 0; i < originalNodes.size(); ++i){
+      const auto& n = originalNodes[i];
+      // Verifica se pode receber mais filhos (MAX_CHILDREN controla se pode ter 3, 4, etc)
+      if(n.children.size() < MAX_CHILDREN) {
+          // Restaura estado
+          nodes_ = originalNodes;
+
+          // Simula inserção (Trifurcação/Anexação direta)
+          addNode(q, n.id);
+
+          recomputeFlowAndRadius();
+          double currentCost = totalCost();
+
+          if(currentCost < minGlobalCost){
+              minGlobalCost = currentCost;
+              bestAttachNode = (NodeId)i;
+              bestSegmentNode = -1; // Invalida bifurcação pois achou melhor trifurcação
+          }
+      }
+  }
+
+  // Restaura estado original antes de aplicar a melhor escolha definitiva
+  nodes_ = originalNodes;
+
+  // Se nada foi encontrado (raro), fallback para conectar à raiz ou centro
+  if(bestSegmentNode == -1 && bestAttachNode == -1) {
+      if(nodes_[1].children.size() < MAX_CHILDREN) bestAttachNode = 1;
+      else bestSegmentNode = 1; // Força bifurcação no centro se não der
+  }
+
+  // aplicacao da melhpr escolha
+  
+  if (bestAttachNode != -1) {
+      // Opção vencedora: TRIFURCAÇÃO (Conectar direto a um nó existente)
+      return addNode(q, bestAttachNode);
+  } 
   else {
-    NodeId tgt = nodes_[bifId].children.front(); // direciona para o primeiro filho
-    term = addNode(q, tgt); // adiciona terminal como filho desse alvo
-  }
+      // Opção vencedora: BIFURCAÇÃO (Quebrar segmento): mantém a lógica antiga de bifurcação
+      NodeId child = bestSegmentNode;
+      Vec2 a = nodes_[child].p;
+      Vec2 b = nodes_[nodes_[child].parent].p;
+      Vec2 bif = lerp(a, b, bestT); 
 
-  // atualiza fluxos e raios após modificação topológica
-  recomputeFlowAndRadius();
-  return term; // retorna id do terminal criado
+      NodeId parentOld = nodes_[child].parent; 
+      NodeId bifId = addNode(bif, parentOld); 
+
+      {
+        auto& vec = nodes_[parentOld].children; 
+        auto it = std::find(vec.begin(), vec.end(), child);
+        if (it != vec.end()) {
+          vec.erase(it);
+        }
+      }
+      nodes_[child].parent = bifId; 
+      nodes_[bifId].children.push_back(child); 
+
+      // Conecta o terminal na nova bifurcação
+      NodeId term = -1;
+      // Nota: bifId acabou de ser criado, tem 1 filho (child). Deve ter espaço.
+      if(nodes_[bifId].children.size() < MAX_CHILDREN)
+        term = addNode(q, bifId); 
+      else {
+        // Caso extremo, não deve ocorrer se MAX_CHILDREN >= 2
+        NodeId tgt = nodes_[bifId].children.front(); 
+        term = addNode(q, tgt); 
+      }
+
+      recomputeFlowAndRadius();
+      return term;
+  }
 }
 
 // DFS recursivo para propagar fluxos bottom-up; outFlow acumula fluxo total da subárvore
@@ -155,13 +257,13 @@ void Tree::recomputeFlowAndRadius(){
 }
 
 
-// custo total da árvore: soma sobre arestas de (r^4 * L)
+// custo total da árvore: Volume = soma sobre arestas de (r^2 * L) (CCO Clássico)
 double Tree::totalCost() const {
   double c = 0.0;
   for(const auto& n: nodes_){
     if(n.parent < 0) continue; // pula nós sem pai
     const double L = dist(n.p, nodes_[n.parent].p); // comprimento da aresta
-    c += std::pow(n.radius, 4.0) * L; // soma custo local
+    c += std::pow(n.radius, 2.0) * L; // soma custo local (Volume)
   }
   return c; // retorna custo total
 }

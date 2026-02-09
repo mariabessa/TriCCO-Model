@@ -7,7 +7,7 @@ namespace cco {
 
 constexpr double MIN_DIST_PT = 0.03;
 constexpr double RROOT_VISUAL = 0.05;
-constexpr unsigned int MAX_CHILDREN = 2;
+constexpr unsigned int MAX_CHILDREN = 3;
 constexpr unsigned int RNG_SEED = 42;
 
 using NodeId = int;

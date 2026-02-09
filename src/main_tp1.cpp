@@ -8,7 +8,7 @@
 int main() {
     const double R = 1.0;       // raio do domínio
     const double gamma = 3.0;   // expoente de Murray
-    const int TARGET_LEAVES = 25;
+    const int TARGET_LEAVES = 200;
 
     cco::Tree T(R, gamma);  
     while (cco::countLeaves(T) < TARGET_LEAVES)
@@ -19,6 +19,12 @@ int main() {
             << " cost=" << T.totalCost()
             << " depth≈" << cco::maxDepthApprox(T)
             << "\n";
+
+    int trifurcations = 0;
+    for(const auto& n : T.nodes()) {
+        if(n.children.size() == 3) trifurcations++;
+    }
+    std::cout << "[TP1] Trifurcations (degree 3): " << trifurcations << "\n";
 
     for(const auto& n : T.nodes()){
         std::cout << "node " << n.id

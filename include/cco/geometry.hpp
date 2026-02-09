@@ -18,4 +18,7 @@ Vec2 lerp(const Vec2& a, const Vec2& b, double t);
 // distância do ponto p ao segmento ab
 double distPointToSegment(const Vec2& p, const Vec2& a, const Vec2& b);
 
+// fator de projeção t para o ponto p no segmento ab
+double getProjectionT(const Vec2& p, const Vec2& a, const Vec2& b);
+
 }

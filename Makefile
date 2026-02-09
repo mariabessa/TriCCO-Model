@@ -27,7 +27,7 @@ build:
 run: build
 	@echo ">>> Executando $(EXEC)..."
 	mkdir -p $(BUILD_DIR)/data
-	./$(BUILD_DIR)/$(EXEC)
+	cd $(BUILD_DIR) && ./$(EXEC)
 
 # -----------------------------------------------------
 # Útil para verificar o VTK
